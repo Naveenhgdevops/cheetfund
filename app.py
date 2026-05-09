@@ -2,8 +2,57 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
-# Page configuration
-st.set_page_config(page_title="Chit Fund Tracker", layout="wide")
+# --- PAGE CONFIGURATION & THEME ---
+st.set_page_config(
+    page_title="Chit Fund Pro", 
+    page_icon="💎", 
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# --- CUSTOM CSS FOR BEAUTIFUL UI ---
+st.markdown("""
+<style>
+    /* Gradient Title */
+    .main-title {
+        font-size: 3rem;
+        font-weight: 800;
+        background: -webkit-linear-gradient(45deg, #FF4B4B, #FF904B);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        padding-bottom: 0.5rem;
+    }
+    
+    /* Modern Metric Cards */
+    [data-testid="stMetric"] {
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 1.2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease-in-out;
+    }
+    
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-5px);
+        border: 1px solid rgba(255, 75, 75, 0.5);
+    }
+    
+    /* Button Styling Override */
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    /* Data Editor container background styling */
+    [data-testid="stDataFrameResizable"] {
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # --- CUSTOMIZED MEMBERS LIST ---
 MEMBERS = [
@@ -13,7 +62,10 @@ MEMBERS = [
     "13. kjdf", "14. fss", "15. jhf", "16. erter"
 ]
 
-st.title("Chit Fund Management Portal")
+# Styled Title
+st.markdown('<h1 class="main-title">💎 Chit Fund Management Portal</h1>', unsafe_allow_html=True)
+st.write("Secure, real-time tracking for your 16-month financial pool.")
+st.write("---")
 
 # 1. Initialize Supabase connection
 @st.cache_resource
@@ -23,7 +75,7 @@ def init_connection():
         key = st.secrets["supabase"]["key"]
         return create_client(url, key)
     except KeyError:
-        st.error("Supabase secrets not found. Please check your .streamlit/secrets.toml or Streamlit Cloud Settings.")
+        st.error("Supabase secrets not found. Please check your .streamlit/secrets.toml.")
         st.stop()
 
 supabase = init_connection()
@@ -42,7 +94,7 @@ def load_schedule_data():
 df_schedule = load_schedule_data()
 
 # --- MAIN SCHEDULE SECTION ---
-with st.expander("📅 View/Edit 16-Month Master Schedule", expanded=False):
+with st.expander("📅 View / Edit 16-Month Master Schedule", expanded=False):
     schedule_config = {
         "id": None, "created_at": None,
         "month_no": st.column_config.NumberColumn("ಕ್ರಮ ಸಂಖ್ಯೆ (Month)", required=True, min_value=1),
@@ -58,11 +110,11 @@ with st.expander("📅 View/Edit 16-Month Master Schedule", expanded=False):
         column_config=schedule_config, 
         num_rows="dynamic", 
         use_container_width=True, 
-        hide_index=True, # <--- NEW: Hides the 0, 1, 2... numbering
+        hide_index=True,
         key="schedule_editor"
     )
 
-    if st.button("💾 Save Master Schedule", type="primary"):
+    if st.button("💾 Save Master Schedule", type="primary", use_container_width=True):
         changes = st.session_state["schedule_editor"]
         try:
             if changes.get("deleted_rows"):
@@ -80,24 +132,25 @@ with st.expander("📅 View/Edit 16-Month Master Schedule", expanded=False):
                     if "payout_date" in new_row and new_row["payout_date"]:
                         new_row["payout_date"] = new_row["payout_date"].isoformat()
                     supabase.table("chit_fund_16_months").insert(new_row).execute()
-            st.success("Master Schedule updated!")
+            st.success("Master Schedule updated successfully!")
             st.rerun()
         except Exception as e:
             st.error(f"Sync failed: {e}")
 
 st.write("")
-st.divider()
 
 # --- MONTHLY DRILL-DOWN & MEMBER COLLECTIONS ---
-st.header("🔍 Monthly Collections Drill-Down")
-
-selected_month = st.selectbox("Select Month to view details:", options=range(1, 17), index=0)
+col1, col2 = st.columns([2, 1])
+with col1:
+    st.header("🔍 Monthly Collections Drill-Down")
+with col2:
+    selected_month = st.selectbox("Jump to Month:", options=range(1, 17), index=0)
 
 month_data = df_schedule[df_schedule["month_no"] == selected_month]
 if not month_data.empty:
     target_payout = month_data.iloc[0]["payout_amount"]
     recipient = month_data.iloc[0]["recipient_name"]
-    st.info(f"**Target Payout for Month {selected_month}:** ₹{target_payout} | **Payout Recipient:** {recipient if pd.notna(recipient) else 'Not Assigned'}")
+    st.info(f"🎯 **Target Payout for Month {selected_month}:** ₹ {target_payout} &nbsp; | &nbsp; 👤 **Payout Recipient:** {recipient if pd.notna(recipient) else 'Not Assigned'}")
 
 def load_monthly_collections(month):
     response = supabase.table("member_payments").select("*").eq("month_no", month).execute()
@@ -125,45 +178,51 @@ collection_config = {
     "status": st.column_config.SelectboxColumn("Payment Status", options=["Pending", "Paid"], default="Pending")
 }
 
-st.write(f"### Collection Checklist - Month {selected_month}")
-edited_collections = st.data_editor(
-    df_collections, 
-    column_config=collection_config, 
-    disabled=["member_name"], 
-    num_rows="fixed", 
-    use_container_width=True, 
-    hide_index=True, # <--- NEW: Hides the 0, 1, 2... numbering
-    key=f"collections_editor_{selected_month}"
-)
+# Add a neat container around the table
+with st.container():
+    edited_collections = st.data_editor(
+        df_collections, 
+        column_config=collection_config, 
+        disabled=["member_name"], 
+        num_rows="fixed", 
+        use_container_width=True, 
+        hide_index=True,
+        key=f"collections_editor_{selected_month}"
+    )
 
 # --- CALCULATE MONTHLY TOTAL ---
+st.write("")
 paid_members = edited_collections[edited_collections["status"] == "Paid"]
 monthly_total_collected = pd.to_numeric(paid_members["amount"], errors="coerce").fillna(0).sum()
 monthly_target = 16 * 6000
 
-st.metric(
-    label=f"💰 Total Collected for Month {selected_month}", 
-    value=f"₹{monthly_total_collected:,.0f}",
-    delta=f"₹{monthly_target - monthly_total_collected:,.0f} remaining",
-    delta_color="off"
-)
+# Metric shown in a column to make it pop
+m_col1, m_col2, m_col3 = st.columns([1.5, 1.5, 1])
+with m_col1:
+    st.metric(
+        label=f"💰 Total Collected (Month {selected_month})", 
+        value=f"₹ {monthly_total_collected:,.0f}",
+        delta=f"₹ {monthly_target - monthly_total_collected:,.0f} remaining",
+        delta_color="off"
+    )
 
 st.write("")
 
 # --- SAVE MONTHLY COLLECTIONS LOGIC ---
-if st.button(f"💾 Save Collections for Month {selected_month}", type="secondary"):
+if st.button(f"🚀 Sync Collections for Month {selected_month}", type="secondary", use_container_width=True):
     changes = st.session_state[f"collections_editor_{selected_month}"]
-    try:
-        if df_collections["id"].isnull().all():
-            records_to_insert = edited_collections.drop(columns=["id"]).to_dict(orient="records")
-            supabase.table("member_payments").insert(records_to_insert).execute()
-        else:
-            if changes.get("edited_rows"):
-                for row_index, updates in changes["edited_rows"].items():
-                    record_id = df_collections.iloc[row_index]["id"]
-                    supabase.table("member_payments").update(updates).eq("id", record_id).execute()
-                    
-        st.success(f"Collections for Month {selected_month} saved securely!")
-        st.rerun()
-    except Exception as e:
-        st.error(f"Error saving collections: {e}")
+    with st.spinner("Syncing with Supabase Database..."):
+        try:
+            if df_collections["id"].isnull().all():
+                records_to_insert = edited_collections.drop(columns=["id"]).to_dict(orient="records")
+                supabase.table("member_payments").insert(records_to_insert).execute()
+            else:
+                if changes.get("edited_rows"):
+                    for row_index, updates in changes["edited_rows"].items():
+                        record_id = df_collections.iloc[row_index]["id"]
+                        supabase.table("member_payments").update(updates).eq("id", record_id).execute()
+                        
+            st.success(f"Collections for Month {selected_month} saved securely!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error saving collections: {e}")
