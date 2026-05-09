@@ -34,7 +34,6 @@ def load_schedule_data():
     if response.data:
         df = pd.DataFrame(response.data)
         if 'payout_date' in df.columns:
-            # Convert string dates to datetime objects for Streamlit
             df['payout_date'] = pd.to_datetime(df['payout_date']).dt.date
         return df
     else:
@@ -55,7 +54,12 @@ with st.expander("📅 View/Edit 16-Month Master Schedule", expanded=False):
     }
 
     edited_schedule_df = st.data_editor(
-        df_schedule, column_config=schedule_config, num_rows="dynamic", use_container_width=True, key="schedule_editor"
+        df_schedule, 
+        column_config=schedule_config, 
+        num_rows="dynamic", 
+        use_container_width=True, 
+        hide_index=True, # <--- NEW: Hides the 0, 1, 2... numbering
+        key="schedule_editor"
     )
 
     if st.button("💾 Save Master Schedule", type="primary"):
@@ -87,7 +91,6 @@ st.divider()
 # --- MONTHLY DRILL-DOWN & MEMBER COLLECTIONS ---
 st.header("🔍 Monthly Collections Drill-Down")
 
-# Select a specific month
 selected_month = st.selectbox("Select Month to view details:", options=range(1, 17), index=0)
 
 month_data = df_schedule[df_schedule["month_no"] == selected_month]
@@ -96,7 +99,6 @@ if not month_data.empty:
     recipient = month_data.iloc[0]["recipient_name"]
     st.info(f"**Target Payout for Month {selected_month}:** ₹{target_payout} | **Payout Recipient:** {recipient if pd.notna(recipient) else 'Not Assigned'}")
 
-# Fetch member collection data
 def load_monthly_collections(month):
     response = supabase.table("member_payments").select("*").eq("month_no", month).execute()
     if response.data:
@@ -112,14 +114,12 @@ def load_monthly_collections(month):
 
 df_collections = load_monthly_collections(selected_month)
 
-# --- SORT DATA SERIALLY ---
-# Force Pandas to sort the table exactly matching the order of the MEMBERS list
+# Sort Data Serially
 df_collections['member_name'] = pd.Categorical(df_collections['member_name'], categories=MEMBERS, ordered=True)
 df_collections = df_collections.sort_values('member_name').reset_index(drop=True)
 
 collection_config = {
     "id": None, "created_at": None, "month_no": None, 
-    # Changed to TextColumn so it's no longer a dropdown
     "member_name": st.column_config.TextColumn("Member Name"),
     "amount": st.column_config.NumberColumn("Collection Amount", default=6000),
     "status": st.column_config.SelectboxColumn("Payment Status", options=["Pending", "Paid"], default="Pending")
@@ -129,9 +129,10 @@ st.write(f"### Collection Checklist - Month {selected_month}")
 edited_collections = st.data_editor(
     df_collections, 
     column_config=collection_config, 
-    disabled=["member_name"], # <--- NEW: This specifically locks the member names from being edited
-    num_rows="fixed", # <--- NEW: Prevents adding or deleting members from the 16-person checklist
+    disabled=["member_name"], 
+    num_rows="fixed", 
     use_container_width=True, 
+    hide_index=True, # <--- NEW: Hides the 0, 1, 2... numbering
     key=f"collections_editor_{selected_month}"
 )
 
@@ -161,7 +162,6 @@ if st.button(f"💾 Save Collections for Month {selected_month}", type="secondar
                 for row_index, updates in changes["edited_rows"].items():
                     record_id = df_collections.iloc[row_index]["id"]
                     supabase.table("member_payments").update(updates).eq("id", record_id).execute()
-            # Deletions and additions handled dynamically if needed (though disabled in UI now)
                     
         st.success(f"Collections for Month {selected_month} saved securely!")
         st.rerun()
