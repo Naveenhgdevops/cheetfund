@@ -119,7 +119,8 @@ df_collections = df_collections.sort_values('member_name').reset_index(drop=True
 
 collection_config = {
     "id": None, "created_at": None, "month_no": None, 
-    "member_name": st.column_config.SelectboxColumn("Member Name", options=MEMBERS, required=True),
+    # Changed to TextColumn so it's no longer a dropdown
+    "member_name": st.column_config.TextColumn("Member Name"),
     "amount": st.column_config.NumberColumn("Collection Amount", default=6000),
     "status": st.column_config.SelectboxColumn("Payment Status", options=["Pending", "Paid"], default="Pending")
 }
@@ -128,7 +129,8 @@ st.write(f"### Collection Checklist - Month {selected_month}")
 edited_collections = st.data_editor(
     df_collections, 
     column_config=collection_config, 
-    num_rows="dynamic", 
+    disabled=["member_name"], # <--- NEW: This specifically locks the member names from being edited
+    num_rows="fixed", # <--- NEW: Prevents adding or deleting members from the 16-person checklist
     use_container_width=True, 
     key=f"collections_editor_{selected_month}"
 )
@@ -159,14 +161,7 @@ if st.button(f"💾 Save Collections for Month {selected_month}", type="secondar
                 for row_index, updates in changes["edited_rows"].items():
                     record_id = df_collections.iloc[row_index]["id"]
                     supabase.table("member_payments").update(updates).eq("id", record_id).execute()
-            if changes.get("deleted_rows"):
-                for row_index in changes["deleted_rows"]:
-                    record_id = df_collections.iloc[row_index]["id"]
-                    supabase.table("member_payments").delete().eq("id", record_id).execute()
-            if changes.get("added_rows"):
-                for new_row in changes["added_rows"]:
-                    new_row["month_no"] = selected_month
-                    supabase.table("member_payments").insert(new_row).execute()
+            # Deletions and additions handled dynamically if needed (though disabled in UI now)
                     
         st.success(f"Collections for Month {selected_month} saved securely!")
         st.rerun()
