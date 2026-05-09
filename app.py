@@ -6,7 +6,6 @@ import pandas as pd
 st.set_page_config(page_title="Chit Fund Tracker", layout="wide")
 
 # --- CUSTOMIZED MEMBERS LIST ---
-# Numbered to ensure unique values for Streamlit dropdowns (prevents errors on duplicate names)
 MEMBERS = [
     "1. Naveen", "2. hgh", "3. kjdf", "4. fss", 
     "5. jhf", "6. Naveenth", "7. hghgh", "8. kjdftt",
@@ -86,13 +85,11 @@ with st.expander("📅 View/Edit 16-Month Master Schedule", expanded=False):
 st.subheader("📊 Fund Summary")
 paid_df = edited_schedule_df[edited_schedule_df["status"] == "Paid"]
 
-# Calculations
 total_pool_per_month = 16 * 6000 
 total_collected = len(paid_df) * total_pool_per_month
 total_payout = pd.to_numeric(paid_df["payout_amount"], errors="coerce").fillna(0).sum()
 remaining_balance = total_collected - total_payout
 
-# Display 3 Columns
 m1, m2, m3 = st.columns(3)
 m1.metric("Paid Months", f"{len(paid_df)} / 16")
 m2.metric("Total Payouts", f"₹{total_payout:,.0f}")
@@ -105,20 +102,18 @@ st.header("🔍 Monthly Collections Drill-Down")
 # Select a specific month
 selected_month = st.selectbox("Select Month to view details:", options=range(1, 17), index=0)
 
-# Show details for the selected month from the master schedule
 month_data = df_schedule[df_schedule["month_no"] == selected_month]
 if not month_data.empty:
     target_payout = month_data.iloc[0]["payout_amount"]
     recipient = month_data.iloc[0]["recipient_name"]
     st.info(f"**Target Payout for Month {selected_month}:** ₹{target_payout} | **Payout Recipient:** {recipient if pd.notna(recipient) else 'Not Assigned'}")
 
-# Fetch member collection data for this specific month
+# Fetch member collection data
 def load_monthly_collections(month):
-    response = supabase.table("member_payments").select("*").eq("month_no", month).order("id").execute()
+    response = supabase.table("member_payments").select("*").eq("month_no", month).execute()
     if response.data:
         return pd.DataFrame(response.data)
     else:
-        # If no data exists for this month in Supabase, auto-generate the 16 member slots locally
         return pd.DataFrame({
             "id": [None] * 16,
             "month_no": [month] * 16,
@@ -129,8 +124,13 @@ def load_monthly_collections(month):
 
 df_collections = load_monthly_collections(selected_month)
 
+# --- NEW: SORT DATA SERIALLY ---
+# Force Pandas to sort the table exactly matching the order of the MEMBERS list
+df_collections['member_name'] = pd.Categorical(df_collections['member_name'], categories=MEMBERS, ordered=True)
+df_collections = df_collections.sort_values('member_name').reset_index(drop=True)
+
 collection_config = {
-    "id": None, "created_at": None, "month_no": None, # Hide backend IDs
+    "id": None, "created_at": None, "month_no": None, 
     "member_name": st.column_config.SelectboxColumn("Member Name", options=MEMBERS, required=True),
     "amount": st.column_config.NumberColumn("Collection Amount", default=6000),
     "status": st.column_config.SelectboxColumn("Payment Status", options=["Pending", "Paid"], default="Pending")
@@ -146,45 +146,35 @@ edited_collections = st.data_editor(
 )
 
 # --- CALCULATE MONTHLY TOTAL ---
-# 1. Filter the edited table to only show members who have paid
 paid_members = edited_collections[edited_collections["status"] == "Paid"]
-
-# 2. Sum the actual "amount" column for those paid members
 monthly_total_collected = pd.to_numeric(paid_members["amount"], errors="coerce").fillna(0).sum()
-
-# 3. Calculate the target amount (assuming 16 members at 6000 each)
 monthly_target = 16 * 6000
 
-# 4. Display the result prominently below the table
 st.metric(
     label=f"💰 Total Collected for Month {selected_month}", 
     value=f"₹{monthly_total_collected:,.0f}",
     delta=f"₹{monthly_target - monthly_total_collected:,.0f} remaining",
-    delta_color="off" # Keeps the remaining amount gray instead of red/green
+    delta_color="off"
 )
 
-st.write("") # Adds a tiny bit of vertical spacing
+st.write("")
 
 # --- SAVE MONTHLY COLLECTIONS LOGIC ---
 if st.button(f"💾 Save Collections for Month {selected_month}", type="secondary"):
     changes = st.session_state[f"collections_editor_{selected_month}"]
     try:
-        # If this is the first time saving for this month, insert all 16 rows to the database
         if df_collections["id"].isnull().all():
             records_to_insert = edited_collections.drop(columns=["id"]).to_dict(orient="records")
             supabase.table("member_payments").insert(records_to_insert).execute()
         else:
-            # Handle Updates (Checking off a box)
             if changes.get("edited_rows"):
                 for row_index, updates in changes["edited_rows"].items():
                     record_id = df_collections.iloc[row_index]["id"]
                     supabase.table("member_payments").update(updates).eq("id", record_id).execute()
-            # Handle Deletions
             if changes.get("deleted_rows"):
                 for row_index in changes["deleted_rows"]:
                     record_id = df_collections.iloc[row_index]["id"]
                     supabase.table("member_payments").delete().eq("id", record_id).execute()
-            # Handle Additions (If you manually add a 17th row)
             if changes.get("added_rows"):
                 for new_row in changes["added_rows"]:
                     new_row["month_no"] = selected_month
