@@ -81,19 +81,7 @@ with st.expander("📅 View/Edit 16-Month Master Schedule", expanded=False):
         except Exception as e:
             st.error(f"Sync failed: {e}")
 
-# --- FUND SUMMARY METRICS ---
-st.subheader("📊 Fund Summary")
-paid_df = edited_schedule_df[edited_schedule_df["status"] == "Paid"]
-
-total_pool_per_month = 16 * 6000 
-total_collected = len(paid_df) * total_pool_per_month
-total_payout = pd.to_numeric(paid_df["payout_amount"], errors="coerce").fillna(0).sum()
-remaining_balance = total_collected - total_payout
-
-m1, m2, m3 = st.columns(3)
-m1.metric("Paid Months", f"{len(paid_df)} / 16")
-m2.metric("Total Payouts", f"₹{total_payout:,.0f}")
-m3.metric("Remaining Balance", f"₹{remaining_balance:,.0f}", delta_color="normal")
+st.write("")
 st.divider()
 
 # --- MONTHLY DRILL-DOWN & MEMBER COLLECTIONS ---
@@ -124,7 +112,7 @@ def load_monthly_collections(month):
 
 df_collections = load_monthly_collections(selected_month)
 
-# --- NEW: SORT DATA SERIALLY ---
+# --- SORT DATA SERIALLY ---
 # Force Pandas to sort the table exactly matching the order of the MEMBERS list
 df_collections['member_name'] = pd.Categorical(df_collections['member_name'], categories=MEMBERS, ordered=True)
 df_collections = df_collections.sort_values('member_name').reset_index(drop=True)
