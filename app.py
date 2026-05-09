@@ -85,18 +85,18 @@ with st.expander("📅 View/Edit 16-Month Master Schedule", expanded=False):
 # --- FUND SUMMARY METRICS ---
 st.subheader("📊 Fund Summary")
 paid_df = edited_schedule_df[edited_schedule_df["status"] == "Paid"]
-pending_df = edited_schedule_df[edited_schedule_df["status"] == "Pending"]
 
+# Calculations
 total_pool_per_month = 16 * 6000 
 total_collected = len(paid_df) * total_pool_per_month
 total_payout = pd.to_numeric(paid_df["payout_amount"], errors="coerce").fillna(0).sum()
 remaining_balance = total_collected - total_payout
 
-m1, m2, m3, m4 = st.columns(4)
+# Display 3 Columns
+m1, m2, m3 = st.columns(3)
 m1.metric("Paid Months", f"{len(paid_df)} / 16")
-m2.metric("Total Pool (Collected)", f"₹{total_collected:,.0f}")
-m3.metric("Total Payouts", f"₹{total_payout:,.0f}")
-m4.metric("Remaining Balance", f"₹{remaining_balance:,.0f}", delta_color="normal")
+m2.metric("Total Payouts", f"₹{total_payout:,.0f}")
+m3.metric("Remaining Balance", f"₹{remaining_balance:,.0f}", delta_color="normal")
 st.divider()
 
 # --- MONTHLY DRILL-DOWN & MEMBER COLLECTIONS ---
