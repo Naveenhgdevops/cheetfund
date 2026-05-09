@@ -24,7 +24,7 @@ def init_connection():
         key = st.secrets["supabase"]["key"]
         return create_client(url, key)
     except KeyError:
-        st.error("Supabase secrets not found. Please check your .streamlit/secrets.toml.")
+        st.error("Supabase secrets not found. Please check your .streamlit/secrets.toml or Streamlit Cloud Settings.")
         st.stop()
 
 supabase = init_connection()
@@ -145,10 +145,27 @@ edited_collections = st.data_editor(
     key=f"collections_editor_{selected_month}"
 )
 
-# Show a quick mini-metric for this month's collection
-month_paid = edited_collections[edited_collections["status"] == "Paid"]
-st.caption(f"Amount collected for Month {selected_month}: ₹{len(month_paid) * 6000} / ₹96000")
+# --- CALCULATE MONTHLY TOTAL ---
+# 1. Filter the edited table to only show members who have paid
+paid_members = edited_collections[edited_collections["status"] == "Paid"]
 
+# 2. Sum the actual "amount" column for those paid members
+monthly_total_collected = pd.to_numeric(paid_members["amount"], errors="coerce").fillna(0).sum()
+
+# 3. Calculate the target amount (assuming 16 members at 6000 each)
+monthly_target = 16 * 6000
+
+# 4. Display the result prominently below the table
+st.metric(
+    label=f"💰 Total Collected for Month {selected_month}", 
+    value=f"₹{monthly_total_collected:,.0f}",
+    delta=f"₹{monthly_target - monthly_total_collected:,.0f} remaining",
+    delta_color="off" # Keeps the remaining amount gray instead of red/green
+)
+
+st.write("") # Adds a tiny bit of vertical spacing
+
+# --- SAVE MONTHLY COLLECTIONS LOGIC ---
 if st.button(f"💾 Save Collections for Month {selected_month}", type="secondary"):
     changes = st.session_state[f"collections_editor_{selected_month}"]
     try:
