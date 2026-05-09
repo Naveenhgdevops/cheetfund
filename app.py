@@ -26,7 +26,7 @@ df = load_data()
 
 st.subheader("16-Month Schedule")
 
-# Configure the columns to match your Kannada headers and desired data types
+# Configure the columns to match Kannada headers and data types
 column_config = {
     "id": None, # Hide the UUID column from the UI
     "created_at": None,
@@ -47,7 +47,38 @@ edited_df = st.data_editor(
     key="data_editor"
 )
 
-# Handle Database Updates via a Save button
+# --- FUND SUMMARY METRICS ---
+st.divider()
+st.subheader("📊 Fund Summary")
+
+# 1. Filter rows based on their status
+paid_df = edited_df[edited_df["status"] == "Paid"]
+pending_df = edited_df[edited_df["status"] == "Pending"]
+
+# 2. Calculations
+total_pool_per_month = 16 * 6000 
+total_collected = len(paid_df) * total_pool_per_month
+
+# Convert payout amounts to numbers (safely ignores text like "ಕಮಿಷನ್ ಚೀಟಿ" and treats it as 0)
+total_payout = pd.to_numeric(paid_df["payout_amount"], errors="coerce").fillna(0).sum()
+
+# Remaining amount (Total collected minus what was paid out)
+remaining_balance = total_collected - total_payout
+
+# Total amount left to be collected in the future
+pending_collection = len(pending_df) * total_pool_per_month
+
+# 3. Display Metrics in a neat row
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Paid Months", f"{len(paid_df)} / 16")
+col2.metric("Total Pool Collected", f"₹ {total_collected:,.0f}")
+col3.metric("Total Payouts", f"₹ {total_payout:,.0f}")
+col4.metric("Remaining Balance", f"₹ {remaining_balance:,.0f}")
+
+st.write(f"*Total pending collections remaining for the fund: ₹ {pending_collection:,.0f}*")
+st.divider()
+
+# --- DATABASE SAVING LOGIC ---
 if st.button("Save Changes to Database", type="primary"):
     # Streamlit stores edited/added/deleted data in session state
     changes = st.session_state["data_editor"]
