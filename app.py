@@ -146,11 +146,15 @@ with col1:
 with col2:
     selected_month = st.selectbox("Jump to Month:", options=range(1, 17), index=0)
 
+# Fetch Payout Target and Recipient Data safely
 month_data = df_schedule[df_schedule["month_no"] == selected_month]
+target_payout = ""
+recipient = "Not Assigned"
+
 if not month_data.empty:
     target_payout = month_data.iloc[0]["payout_amount"]
     recipient = month_data.iloc[0]["recipient_name"]
-    st.info(f"🎯 **Target Payout for Month {selected_month}:** ₹ {target_payout} &nbsp; | &nbsp; 👤 **Payout Recipient:** {recipient if pd.notna(recipient) else 'Not Assigned'}")
+    recipient = recipient if pd.notna(recipient) else 'Not Assigned'
 
 def load_monthly_collections(month):
     response = supabase.table("member_payments").select("*").eq("month_no", month).execute()
@@ -190,19 +194,36 @@ with st.container():
         key=f"collections_editor_{selected_month}"
     )
 
-# --- CALCULATE MONTHLY TOTAL ---
+# --- CALCULATE MONTHLY METRICS & CARDS ---
 st.write("")
 paid_members = edited_collections[edited_collections["status"] == "Paid"]
 monthly_total_collected = pd.to_numeric(paid_members["amount"], errors="coerce").fillna(0).sum()
 monthly_target = 16 * 6000
 
-# Metric shown in a column to make it pop
+# Format payout string safely (to handle "ಕಮಿಷನ್ ಚೀಟಿ" vs numbers like "80000")
+try:
+    payout_display = f"₹ {float(target_payout):,.0f}"
+except (ValueError, TypeError):
+    payout_display = str(target_payout) if target_payout else "Not Set"
+
+# Display Dual Metrics side-by-side
 m_col1, m_col2, m_col3 = st.columns([1.5, 1.5, 1])
+
+# Card 1: Total Collected
 with m_col1:
     st.metric(
         label=f"💰 Total Collected (Month {selected_month})", 
         value=f"₹ {monthly_total_collected:,.0f}",
         delta=f"₹ {monthly_target - monthly_total_collected:,.0f} remaining",
+        delta_color="off"
+    )
+
+# Card 2: Payout Recipient & Target Amount
+with m_col2:
+    st.metric(
+        label=f"🎯 Target Payout",
+        value=payout_display,
+        delta=f"👤 To: {recipient}",
         delta_color="off"
     )
 
